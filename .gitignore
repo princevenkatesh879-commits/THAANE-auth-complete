@@ -1,0 +1,22 @@
+node_modules
+dist
+.env
+.env.local
+.DS_Store
+
+.env
+server/.env
+
+server/thaane-firebase-adminsdk.json
+
+.firebase/
+
+# Local backup files
+*.backup
+*.before-*
+*.employee-backup
+
+# Local attachment/export artifacts
+:thaane-logo.jpg_files/
+
+server/index.cjs.customer-care-backup

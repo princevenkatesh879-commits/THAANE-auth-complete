@@ -1,0 +1,195 @@
+
+.admin-product-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-product-delete {
+  border: 1px solid rgba(140, 45, 35, 0.35);
+  background: transparent;
+  color: #8c2d23;
+  min-height: 38px;
+  padding: 0 14px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.admin-product-delete:hover {
+  background: #8c2d23;
+  border-color: #8c2d23;
+  color: #fff;
+}
+
+.admin-product-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.product-detail-stock-warning {
+  margin: 10px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.product-detail-stock-warning.is-out {
+  margin-top: 10px;
+}
+
+.quantity-control button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.product-detail-add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* THAANE sign-in popup */
+.product-auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(25, 16, 12, 0.58);
+  backdrop-filter: blur(8px);
+}
+
+.product-auth-modal {
+  position: relative;
+  width: min(460px, 100%);
+  max-height: min(760px, calc(100dvh - 48px));
+  overflow-y: auto;
+  background: #f4eadb;
+  border: 1px solid rgba(43, 27, 20, 0.22);
+  box-shadow: 0 28px 80px rgba(25, 16, 12, 0.28);
+}
+
+.product-auth-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2b1b14;
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.product-auth-close:hover {
+  opacity: 0.6;
+}
+
+.product-auth-modal .auth-card {
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+@media (max-width: 600px) {
+  .product-auth-overlay {
+    padding: 12px;
+    align-items: center;
+  }
+
+  .product-auth-modal {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+  }
+}
+
+/* THAANE centered authentication modal */
+.product-auth-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1000000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  overflow: hidden !important;
+}
+
+.product-auth-modal {
+  position: relative !important;
+  width: min(560px, calc(100vw - 48px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(43, 27, 20, 0.16) !important;
+  box-shadow: 0 24px 70px rgba(25, 16, 12, 0.18) !important;
+}
+
+.product-auth-modal .auth-shell {
+  position: relative !important;
+  inset: auto !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 48px 52px 38px !important;
+  display: block !important;
+  background: #ffffff !important;
+  overflow: visible !important;
+}
+
+.product-auth-modal .auth-card {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #ffffff !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.product-auth-modal .floating-help,
+.product-auth-modal .bottom-note {
+  display: none !important;
+}
+
+.product-auth-modal .product-auth-close {
+  position: absolute !important;
+  top: 16px !important;
+  right: 18px !important;
+  z-index: 20 !important;
+}
+
+@media (max-width: 600px) {
+  .product-auth-overlay {
+    padding: 12px !important;
+  }
+
+  .product-auth-modal {
+    width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+  }
+
+  .product-auth-modal .auth-shell {
+    padding: 42px 24px 28px !important;
+  }
+}
