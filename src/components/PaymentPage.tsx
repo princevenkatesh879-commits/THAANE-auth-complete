@@ -66,7 +66,7 @@ export default function PaymentPage({
     setPaymentError('')
 
     try {
-      const response = await fetch('http://localhost:4242/api/create-order', {
+      const response = await fetch('https://thaane-auth-complete.onrender.com/api/create-order', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -125,7 +125,7 @@ export default function PaymentPage({
             )
 
             const verificationResponse = await fetch(
-              'http://localhost:4242/api/verify-payment',
+              'https://thaane-auth-complete.onrender.com/api/verify-payment',
               {
                 method: 'POST',
                 headers: {
