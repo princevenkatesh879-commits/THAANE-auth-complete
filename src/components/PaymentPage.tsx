@@ -121,6 +121,11 @@ export default function PaymentPage({
         name: 'THAANE',
         description: 'THAANE Order',
         order_id: data.id,
+        prefill: {
+          name: checkoutAddress?.fullName || user?.displayName || '',
+          email: user?.email || '',
+          contact: checkoutAddress?.phone || '',
+        },
         theme: {
           color: '#2b1a15',
         },
