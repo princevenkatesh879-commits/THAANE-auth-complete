@@ -265,15 +265,31 @@ export default function CheckoutPage({
               </div>
             </div>
 
-            <label>
-              EMAIL ADDRESS
-              <input
-                type="email"
-                name="email"
-                placeholder="you@example.com"
-                required
-              />
-            </label>
+            {user?.phoneNumber ? (
+              <label>
+                EMAIL ADDRESS
+                <input
+                  type="email"
+                  name="contactEmail"
+                  placeholder="you@example.com"
+                  defaultValue={user.email ?? ''}
+                  required
+                />
+              </label>
+            ) : (
+              <label>
+                MOBILE NUMBER
+                <input
+                  type="tel"
+                  name="contactPhone"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="Enter mobile number"
+                  defaultValue={user?.phoneNumber ?? ''}
+                  required
+                />
+              </label>
+            )}
 
             <div className="checkout-section">
               <span className="checkout-section-number">02</span>
