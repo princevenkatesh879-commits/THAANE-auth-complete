@@ -120,6 +120,7 @@ export default function PaymentPage({
         currency: data.currency,
         name: 'THAANE',
         description: 'THAANE Order',
+        image: `${window.location.origin}/thaane-logo-transparent.png`,
         order_id: data.id,
         prefill: {
           name: checkoutAddress?.fullName || user?.displayName || '',
