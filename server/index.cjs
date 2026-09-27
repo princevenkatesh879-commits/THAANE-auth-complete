@@ -931,6 +931,7 @@ app.post('/api/create-order', async (req, res) => {
 
       trustedItems.push({
         productId: String(item.productId),
+        productName: String(item.productName ?? ''),
         quantity,
         size: String(item.size ?? ''),
         color: String(item.color ?? ''),

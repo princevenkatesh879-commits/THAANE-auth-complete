@@ -100,6 +100,7 @@ export default function PaymentPage({
           address: checkoutAddress,
           items: items.map(({ product, quantity, size, color }) => ({
             productId: product.id,
+            productName: product.name,
             quantity,
             size,
             color,
