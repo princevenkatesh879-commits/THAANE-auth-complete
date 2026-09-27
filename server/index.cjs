@@ -870,7 +870,31 @@ app.post('/api/create-order', async (req, res) => {
   }
 
   try {
-    const { items, currency = 'INR' } = req.body
+    const authorization = req.headers.authorization || ''
+
+    if (!authorization.startsWith('Bearer ')) {
+      return res.status(401).json({
+        error: 'Authentication required.',
+      })
+    }
+
+    const idToken = authorization.slice('Bearer '.length).trim()
+
+    if (!idToken) {
+      return res.status(401).json({
+        error: 'Authentication required.',
+      })
+    }
+
+    const decodedToken = await adminAuth.verifyIdToken(idToken)
+
+    const {
+      items,
+      currency = 'INR',
+      customerName = '',
+      customerEmail = '',
+      address,
+    } = req.body || {}
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -880,11 +904,18 @@ app.post('/api/create-order', async (req, res) => {
 
     if (currency !== 'INR') {
       return res.status(400).json({
-        error: 'This test integration currently supports INR only.',
+        error: 'Only INR orders are supported.',
+      })
+    }
+
+    if (!address || typeof address !== 'object') {
+      return res.status(400).json({
+        error: 'Delivery address is missing.',
       })
     }
 
     let total = 0
+    const trustedItems = []
 
     for (const item of items) {
       const price = products[item.productId]
@@ -897,6 +928,13 @@ app.post('/api/create-order', async (req, res) => {
       }
 
       total += price * quantity
+
+      trustedItems.push({
+        productId: String(item.productId),
+        quantity,
+        size: String(item.size ?? ''),
+        color: String(item.color ?? ''),
+      })
     }
 
     const order = await razorpay.orders.create({
@@ -904,6 +942,38 @@ app.post('/api/create-order', async (req, res) => {
       currency: 'INR',
       receipt: `thaane_${Date.now()}`,
     })
+
+    await adminDb
+      .collection('pendingCheckouts')
+      .doc(order.id)
+      .set({
+        razorpayOrderId: order.id,
+        userId: decodedToken.uid,
+        customerEmail: decodedToken.email || String(customerEmail || ''),
+        customerName:
+          String(customerName || '').trim() ||
+          decodedToken.name ||
+          decodedToken.email ||
+          'THAANE Customer',
+        items: trustedItems,
+        address: {
+          fullName: String(address.fullName ?? ''),
+          phone: String(address.phone ?? ''),
+          addressLine1: String(address.addressLine1 ?? ''),
+          addressLine2: String(address.addressLine2 ?? ''),
+          city: String(address.city ?? ''),
+          state: String(address.state ?? ''),
+          postalCode: String(address.postalCode ?? ''),
+          country: String(address.country ?? 'India'),
+        },
+        subtotal: total,
+        shipping: 0,
+        total,
+        currency: 'INR',
+        status: 'created',
+        createdAt: require('firebase-admin/firestore').FieldValue.serverTimestamp(),
+        updatedAt: require('firebase-admin/firestore').FieldValue.serverTimestamp(),
+      })
 
     res.json({
       id: order.id,
@@ -928,12 +998,29 @@ app.post('/api/verify-payment', async (req, res) => {
       })
     }
 
+    const authorization = req.headers.authorization || ''
+
+    if (!authorization.startsWith('Bearer ')) {
+      return res.status(401).json({
+        error: 'Authentication required.',
+      })
+    }
+
+    const idToken = authorization.slice('Bearer '.length).trim()
+
+    if (!idToken) {
+      return res.status(401).json({
+        error: 'Authentication required.',
+      })
+    }
+
+    const decodedToken = await adminAuth.verifyIdToken(idToken)
+
     const {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
-      order,
-    } = req.body
+    } = req.body || {}
 
     if (
       !razorpay_order_id ||
@@ -945,6 +1032,28 @@ app.post('/api/verify-payment', async (req, res) => {
       })
     }
 
+    const pendingReference = adminDb
+      .collection('pendingCheckouts')
+      .doc(razorpay_order_id)
+
+    const pendingSnapshot = await pendingReference.get()
+
+    if (!pendingSnapshot.exists) {
+      return res.status(404).json({
+        verified: false,
+        error: 'Checkout session not found or expired.',
+      })
+    }
+
+    const pendingCheckout = pendingSnapshot.data()
+
+    if (pendingCheckout.userId !== decodedToken.uid) {
+      return res.status(403).json({
+        verified: false,
+        error: 'This payment does not belong to the signed-in customer.',
+      })
+    }
+
     const crypto = require('crypto')
 
     const generatedSignature = crypto
@@ -952,146 +1061,189 @@ app.post('/api/verify-payment', async (req, res) => {
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest('hex')
 
-    if (generatedSignature !== razorpay_signature) {
+    const suppliedSignature = String(razorpay_signature)
+
+    const generatedBuffer = Buffer.from(generatedSignature, 'utf8')
+    const suppliedBuffer = Buffer.from(suppliedSignature, 'utf8')
+
+    if (
+      generatedBuffer.length !== suppliedBuffer.length ||
+      !crypto.timingSafeEqual(generatedBuffer, suppliedBuffer)
+    ) {
       return res.status(400).json({
         verified: false,
         error: 'Payment verification failed.',
       })
     }
 
-    if (!order || typeof order !== 'object') {
-      return res.status(400).json({
-        verified: false,
-        error: 'Order details are missing.',
-      })
-    }
-
-    const requiredOrderFields = [
-      'customerName',
-      'items',
-      'address',
-      'total',
-      'currency',
-    ]
-
-    for (const field of requiredOrderFields) {
-      if (order[field] === undefined || order[field] === null) {
-        return res.status(400).json({
-          verified: false,
-          error: `Missing order field: ${field}.`,
-        })
-      }
-    }
-
-    if (
-      !Array.isArray(order.items) ||
-      order.items.length === 0
-    ) {
-      return res.status(400).json({
-        verified: false,
-        error: 'Order items are missing.',
-      })
-    }
-
-    let calculatedTotal = 0
-
-    for (const item of order.items) {
-      const price = products[item.productId]
-      const quantity = Number(item.quantity)
-
-      if (
-        !price ||
-        !Number.isInteger(quantity) ||
-        quantity < 1
-      ) {
-        return res.status(400).json({
-          verified: false,
-          error: 'Invalid product or quantity.',
-        })
-      }
-
-      calculatedTotal += price * quantity
-    }
-
-    if (order.currency !== 'INR') {
-      return res.status(400).json({
-        verified: false,
-        error: 'Only INR orders are supported.',
-      })
-    }
-
-    if (Number(order.total) !== calculatedTotal) {
-      return res.status(400).json({
-        verified: false,
-        error: 'Order total does not match the server price.',
-      })
-    }
-
-    const razorpayOrder = razorpay
-      ? await razorpay.orders.fetch(razorpay_order_id)
-      : null
+    const razorpayOrder = await razorpay.orders.fetch(razorpay_order_id)
 
     if (
       !razorpayOrder ||
-      Number(razorpayOrder.amount) !== calculatedTotal * 100 ||
+      Number(razorpayOrder.amount) !== Number(pendingCheckout.total) * 100 ||
       razorpayOrder.currency !== 'INR'
     ) {
       return res.status(400).json({
         verified: false,
-        error: 'Payment order amount does not match the order.',
+        error: 'Payment order amount does not match the checkout.',
       })
     }
 
-    const orderReference = await adminDb.collection('orders').add({
-      userId: order.userId ?? null,
-      customerEmail: order.customerEmail ?? '',
-      customerName: String(order.customerName),
-      items: order.items.map((item) => ({
-        productId: String(item.productId),
-        productName: String(item.productName ?? ''),
-        quantity: Number(item.quantity),
-        price: products[item.productId],
-        size: String(item.size ?? ''),
-        color: String(item.color ?? ''),
-      })),
-      address: {
-        fullName: String(order.address.fullName ?? ''),
-        phone: String(order.address.phone ?? ''),
-        addressLine1: String(order.address.addressLine1 ?? ''),
-        addressLine2: String(order.address.addressLine2 ?? ''),
-        city: String(order.address.city ?? ''),
-        state: String(order.address.state ?? ''),
-        postalCode: String(order.address.postalCode ?? ''),
-        country: String(order.address.country ?? 'India'),
-      },
-      subtotal: calculatedTotal,
-      shipping: 0,
-      total: calculatedTotal,
-      currency: 'INR',
-      paymentMethod: 'RAZORPAY',
-      paymentStatus: 'paid',
-      orderStatus: 'confirmed',
-      trackingNumber: '',
-      trackingCarrier: '',
-      estimatedDelivery: '',
-      trackingUrl: '',
-      razorpayOrderId: razorpay_order_id,
-      razorpayPaymentId: razorpay_payment_id,
-      createdAt: require('firebase-admin/firestore').FieldValue.serverTimestamp(),
-      updatedAt: require('firebase-admin/firestore').FieldValue.serverTimestamp(),
+    const razorpayPayment = await razorpay.payments.fetch(
+      razorpay_payment_id,
+    )
+
+    if (
+      !razorpayPayment ||
+      razorpayPayment.order_id !== razorpay_order_id ||
+      Number(razorpayPayment.amount) !== Number(pendingCheckout.total) * 100 ||
+      razorpayPayment.currency !== 'INR'
+    ) {
+      return res.status(400).json({
+        verified: false,
+        error: 'Payment details do not match the checkout.',
+      })
+    }
+
+    if (razorpayPayment.status !== 'captured') {
+      return res.status(400).json({
+        verified: false,
+        error: 'Payment has not been captured yet.',
+      })
+    }
+
+    const orderReference = adminDb
+      .collection('orders')
+      .doc(razorpay_order_id)
+
+    const orderResult = await adminDb.runTransaction(async (transaction) => {
+      const existingOrderSnapshot = await transaction.get(orderReference)
+
+      if (existingOrderSnapshot.exists) {
+        const existingOrder = existingOrderSnapshot.data()
+
+        if (
+          existingOrder.razorpayPaymentId &&
+          existingOrder.razorpayPaymentId !== razorpay_payment_id
+        ) {
+          throw new Error('This Razorpay order has already been processed.')
+        }
+
+        transaction.set(
+          pendingReference,
+          {
+            status: 'paid',
+            updatedAt: require('firebase-admin/firestore')
+              .FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
+
+        return {
+          created: false,
+          paymentId:
+            existingOrder.razorpayPaymentId || razorpay_payment_id,
+        }
+      }
+
+      const trustedItems = Array.isArray(pendingCheckout.items)
+        ? pendingCheckout.items.map((item) => ({
+            productId: String(item.productId),
+            productName: String(item.productName ?? ''),
+            quantity: Number(item.quantity),
+            price: products[item.productId],
+            size: String(item.size ?? ''),
+            color: String(item.color ?? ''),
+          }))
+        : []
+
+      if (trustedItems.length === 0) {
+        throw new Error('Checkout items are missing.')
+      }
+
+      transaction.create(orderReference, {
+        userId: pendingCheckout.userId,
+        customerEmail: pendingCheckout.customerEmail || '',
+        customerName:
+          String(pendingCheckout.customerName || '').trim() ||
+          'THAANE Customer',
+        items: trustedItems,
+        address: {
+          fullName: String(pendingCheckout.address?.fullName ?? ''),
+          phone: String(pendingCheckout.address?.phone ?? ''),
+          addressLine1: String(
+            pendingCheckout.address?.addressLine1 ?? '',
+          ),
+          addressLine2: String(
+            pendingCheckout.address?.addressLine2 ?? '',
+          ),
+          city: String(pendingCheckout.address?.city ?? ''),
+          state: String(pendingCheckout.address?.state ?? ''),
+          postalCode: String(
+            pendingCheckout.address?.postalCode ?? '',
+          ),
+          country: String(
+            pendingCheckout.address?.country ?? 'India',
+          ),
+        },
+        subtotal: Number(pendingCheckout.total),
+        shipping: Number(pendingCheckout.shipping || 0),
+        total: Number(pendingCheckout.total),
+        currency: 'INR',
+        paymentMethod: 'RAZORPAY',
+        paymentStatus: 'paid',
+        orderStatus: 'confirmed',
+        trackingNumber: '',
+        trackingCarrier: '',
+        estimatedDelivery: '',
+        trackingUrl: '',
+        razorpayOrderId: razorpay_order_id,
+        razorpayPaymentId: razorpay_payment_id,
+        createdAt: require('firebase-admin/firestore')
+          .FieldValue.serverTimestamp(),
+        updatedAt: require('firebase-admin/firestore')
+          .FieldValue.serverTimestamp(),
+      })
+
+      transaction.set(
+        pendingReference,
+        {
+          status: 'paid',
+          razorpayPaymentId: razorpay_payment_id,
+          updatedAt: require('firebase-admin/firestore')
+            .FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      )
+
+      return {
+        created: true,
+        paymentId: razorpay_payment_id,
+      }
     })
 
     return res.json({
       verified: true,
-      paymentId: razorpay_payment_id,
-      orderId: razorpay_order_id,
-      firestoreOrderId: orderReference.id,
+      paymentId: orderResult.paymentId,
+      orderId: orderReference.id,
+      alreadyProcessed: !orderResult.created,
     })
   } catch (error) {
     console.error('Payment verification failed:', error)
 
+    if (
+      error instanceof Error &&
+      error.message === 'This Razorpay order has already been processed.'
+    ) {
+      return res.status(409).json({
+        verified: false,
+        error: error.message,
+      })
+    }
+
     return res.status(500).json({
-      error: 'Unable to verify payment and create order.',
+      verified: false,
+      error: 'Unable to verify payment.',
     })
   }
 })

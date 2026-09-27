@@ -66,13 +66,38 @@ export default function PaymentPage({
     setPaymentError('')
 
     try {
+      const currentUser = await import('../lib/firebase').then(
+        ({ auth }) => auth.currentUser,
+      )
+
+      if (!currentUser) {
+        throw new Error('Please sign in before completing your order.')
+      }
+
+      if (!checkoutAddress) {
+        throw new Error(
+          'Delivery address is missing. Please return to checkout and confirm your address.',
+        )
+      }
+
+      const idToken = await currentUser.getIdToken()
+
+      const customerName =
+        checkoutAddress.fullName ||
+        currentUser.displayName ||
+        'THAANE Customer'
+
       const response = await fetch('https://thaane-auth-complete.onrender.com/api/create-order', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
           currency: 'INR',
+          customerName,
+          customerEmail: currentUser.email || '',
+          address: checkoutAddress,
           items: items.map(({ product, quantity, size, color }) => ({
             productId: product.id,
             quantity,
@@ -108,43 +133,15 @@ export default function PaymentPage({
               )
             }
 
-            const customerName =
-              checkoutAddress.fullName ||
-              user?.displayName ||
-              'THAANE Customer'
-
-            const orderItems = items.map(
-              ({ product, quantity, size, color }) => ({
-                productId: product.id,
-                productName: product.name,
-                quantity,
-                price: product.price,
-                size: size ?? '',
-                color: color ?? '',
-              }),
-            )
-
             const verificationResponse = await fetch(
               'https://thaane-auth-complete.onrender.com/api/verify-payment',
               {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
+                  Authorization: `Bearer ${idToken}`,
                 },
-                body: JSON.stringify({
-                  ...paymentResponse,
-                  order: {
-                    userId: user?.uid ?? null,
-                    customerEmail: user?.email ?? '',
-                    customerName,
-                    items: orderItems,
-                    address: checkoutAddress,
-                    subtotal: total,
-                    shipping: 0,
-                    total,
-                    currency: 'INR',
-                  },
-                }),
+                body: JSON.stringify(paymentResponse),
               },
             )
 
